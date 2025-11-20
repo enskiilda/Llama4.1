@@ -338,7 +338,7 @@ export async function POST(request: Request) {
             const assistantMessage: any = {
               role: "assistant",
               content: fullText || null,
-              toolCalls: [{
+              tool_calls: [{
                 id: firstToolCall.id,
                 type: "function",
                 function: {
@@ -579,7 +579,7 @@ SCREEN: ${width}×${height} pixels | Aspect ratio: 4:3 | Origin: (0,0) at TOP-LE
             if (toolResult!.image) {
               chatHistory.push({
                 role: "tool",
-                toolCallId: toolResult!.tool_call_id,
+                tool_call_id: toolResult!.tool_call_id,
                 content: [
                   {
                     type: "text",
@@ -594,7 +594,7 @@ SCREEN: ${width}×${height} pixels | Aspect ratio: 4:3 | Origin: (0,0) at TOP-LE
             } else {
               chatHistory.push({
                 role: "tool",
-                toolCallId: toolResult!.tool_call_id,
+                tool_call_id: toolResult!.tool_call_id,
                 content: toolResult!.content,
               });
             }
