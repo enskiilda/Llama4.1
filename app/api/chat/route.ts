@@ -298,7 +298,11 @@ export async function POST(request: Request) {
           });
 
           let fullText = "";
-          let toolCalls: any[] = [];
+          const toolCalls: Array<{
+            id: string;
+            name: string;
+            arguments: string;
+          }> = [];
 
           for await (const event of response) {
             if (event.choices && event.choices.length > 0) {
@@ -342,33 +346,43 @@ export async function POST(request: Request) {
                 id: firstToolCall.id,
                 type: "function",
                 function: {
-                  name: firstToolCall.name,
-                  arguments: firstToolCall.arguments,
+                  name: toolCall.name,
+                  arguments: toolCall.arguments,
                 },
-              }],
+              }))
+              .filter((toolCall) => toolCall.function.name);
+
+            if (normalizedCalls.length === 0) {
+              continue;
+            }
+
+            const assistantMessage: any = {
+              role: "assistant",
+              content: fullText || null,
+              tool_calls: normalizedCalls,
             };
             chatHistory.push(assistantMessage);
 
-            const toolCall = firstToolCall;
-            const parsedArgs = JSON.parse(toolCall.arguments);
-            const toolName = toolCall.name === "computer_use" ? "computer" : "bash";
+            for (const toolCall of normalizedCalls) {
+              const parsedArgs = JSON.parse(toolCall.function.arguments || "{}") as any;
+              const toolName = toolCall.function.name === "computer_use" ? "computer" : "bash";
 
-            sendEvent({
-              type: "tool-input-available",
-              toolCallId: toolCall.id,
-              toolName: toolName,
-              input: parsedArgs,
-            });
+              sendEvent({
+                type: "tool-input-available",
+                toolCallId: toolCall.id,
+                toolName: toolName,
+                input: parsedArgs,
+              });
 
-            const toolResult = await (async () => {
-              try {
-                let resultData: any = { type: "text", text: "" };
-                let resultText = "";
+              const toolResult = await (async () => {
+                try {
+                  let resultData: any = { type: "text", text: "" };
+                  let resultText = "";
 
-                if (toolCall.name === "computer_use") {
-                  const action = parsedArgs.action;
+                  if (toolCall.function.name === "computer_use") {
+                    const action = parsedArgs.action;
 
-                  switch (action) {
+                    switch (action) {
                     case "screenshot": {
                       const response = await kernelClient.browsers.computer.captureScreenshot(desktop.session_id);
                       const blob = await response.blob();
@@ -519,7 +533,7 @@ SCREEN: ${width}×${height} pixels | Aspect ratio: 4:3 | Origin: (0,0) at TOP-LE
                     content: resultText,
                     image: action === "screenshot" ? resultData.data : undefined,
                   };
-                } else if (toolCall.name === "bash_command") {
+                } else if (toolCall.function.name === "bash_command") {
                   const result = await kernelClient.browsers.process.exec(desktop.session_id, {
                     command: parsedArgs.command,
                   });
