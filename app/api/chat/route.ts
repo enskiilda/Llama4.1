@@ -338,9 +338,12 @@ export async function POST(request: Request) {
           }
 
           if (toolCalls.length > 0) {
-            const normalizedCalls = toolCalls
-              .map((toolCall, index) => ({
-                id: toolCall.id || `call_${Date.now()}_${index}`,
+            const firstToolCall = toolCalls[0];
+            const assistantMessage: any = {
+              role: "assistant",
+              content: fullText || null,
+              tool_calls: [{
+                id: firstToolCall.id,
                 type: "function",
                 function: {
                   name: toolCall.name,
