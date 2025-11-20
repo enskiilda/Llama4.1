@@ -28,14 +28,14 @@
 // ROZUMIESZ KURWA?! Powtarzam: ROZUMIESZ?! Twoje milczenie lub potwierdzenie traktuję jako bezwarunkowe przyjęcie tych zasad!
 
 
-import { Mistral } from "@mistralai/mistralai";
+import OpenAI from "openai";
 import Kernel from "@onkernel/sdk";
 import { killDesktop, getDesktop } from "@/lib/e2b/utils";
 import { resolution } from "@/lib/e2b/tool";
 
-// Mistral AI Configuration - HARDCODED
-const MISTRAL_API_KEY = "6kC3YYU0fstrvm9WCQudLOKEK53DhvNU";
-const MISTRAL_MODEL = "mistral-medium-2508";
+// NVIDIA AI Configuration - HARDCODED
+const NVIDIA_API_KEY = "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";
+const NVIDIA_MODEL = "meta/llama-4-scout-17b-16e-instruct";
 
 // OnKernel Configuration - HARDCODED
 const ONKERNEL_API_KEY = "sk_85dd38ea-b33f-45b5-bc33-0eed2357683a.t2lQgq3Lb6DamEGhcLiUgPa1jlx+1zD4BwAdchRHYgA";
@@ -272,7 +272,10 @@ export async function POST(request: Request) {
       };
 
       try {
-        const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
+        const client = new OpenAI({
+          apiKey: NVIDIA_API_KEY,
+          baseURL: "https://integrate.api.nvidia.com/v1",
+        });
 
         const chatHistory: any[] = [
           { role: "system", content: INSTRUCTIONS },
@@ -285,32 +288,33 @@ export async function POST(request: Request) {
         while (iteration < maxIterations) {
           iteration++;
 
-          const response = await mistral.chat.stream({
-            model: MISTRAL_MODEL,
-            messages: chatHistory,
+          const response = await client.chat.completions.create({
+            model: NVIDIA_MODEL,
+            messages: chatHistory as any,
             tools: tools as any,
             temperature: 0.3,
-            maxTokens: 4096,
+            max_tokens: 4096,
+            stream: true,
           });
 
           let fullText = "";
           let toolCalls: any[] = [];
 
           for await (const event of response) {
-            if (event.data.choices && event.data.choices.length > 0) {
-              const choice = event.data.choices[0];
+            if (event.choices && event.choices.length > 0) {
+              const choice = event.choices[0];
               const delta = choice.delta;
 
-              if (delta.content) {
-                fullText += delta.content;
+              if (delta?.content) {
+                fullText += delta.content as string;
                 sendEvent({
                   type: "text-delta",
                   textDelta: delta.content,
                 });
               }
 
-              if (delta.toolCalls) {
-                for (const toolCallDelta of delta.toolCalls) {
+              if (delta?.tool_calls) {
+                for (const toolCallDelta of delta.tool_calls) {
                   const index = toolCallDelta.index;
 
                   if (index !== undefined && !toolCalls[index]) {
@@ -334,7 +338,7 @@ export async function POST(request: Request) {
             const assistantMessage: any = {
               role: "assistant",
               content: fullText || null,
-              toolCalls: [{
+              tool_calls: [{
                 id: firstToolCall.id,
                 type: "function",
                 function: {
@@ -575,7 +579,7 @@ SCREEN: ${width}×${height} pixels | Aspect ratio: 4:3 | Origin: (0,0) at TOP-LE
             if (toolResult!.image) {
               chatHistory.push({
                 role: "tool",
-                toolCallId: toolResult!.tool_call_id,
+                tool_call_id: toolResult!.tool_call_id,
                 content: [
                   {
                     type: "text",
@@ -590,7 +594,7 @@ SCREEN: ${width}×${height} pixels | Aspect ratio: 4:3 | Origin: (0,0) at TOP-LE
             } else {
               chatHistory.push({
                 role: "tool",
-                toolCallId: toolResult!.tool_call_id,
+                tool_call_id: toolResult!.tool_call_id,
                 content: toolResult!.content,
               });
             }
